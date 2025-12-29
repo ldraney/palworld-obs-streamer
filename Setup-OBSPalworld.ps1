@@ -17,13 +17,15 @@
 #>
 
 param(
-    [switch]$Force  # Force overwrite existing config
+    [switch]$Force,  # Force overwrite existing config
+    [string]$EnvFile = "$HOME\palworld-obs-streamer-secrets\.env"  # Path to .env file with stream key
 )
 
 # Configuration
 $OBSConfigPath = "$env:APPDATA\obs-studio"
 $ProfileName = "Palworld"
 $SceneCollectionName = "Palworld"
+$SecretsRepo = "$HOME\palworld-obs-streamer-secrets"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  Palworld OBS Streaming Setup" -ForegroundColor Cyan
@@ -56,17 +58,37 @@ if ((Test-Path "$OBSConfigPath\basic\profiles\$ProfileName") -and -not $Force) {
     }
 }
 
-# Prompt for Twitch stream key
+# Get Twitch stream key (from .env file or prompt)
 Write-Host ""
-Write-Host "Enter your Twitch Stream Key" -ForegroundColor Yellow
-Write-Host "(Find it at: https://dashboard.twitch.tv/settings/stream)" -ForegroundColor Gray
-$streamKey = Read-Host -AsSecureString "Stream Key"
-$streamKeyPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($streamKey)
-)
+$streamKeyPlain = $null
+
+# Try to read from secrets .env file
+if (Test-Path $EnvFile) {
+    Write-Host "[OK] Found secrets file: $EnvFile" -ForegroundColor Green
+    $envContent = Get-Content $EnvFile
+    foreach ($line in $envContent) {
+        if ($line -match "^TWITCH_STREAM_KEY=(.+)$") {
+            $streamKeyPlain = $Matches[1].Trim()
+            Write-Host "[OK] Stream key loaded from .env file" -ForegroundColor Green
+            break
+        }
+    }
+}
+
+# If not found in .env, prompt user
+if ([string]::IsNullOrWhiteSpace($streamKeyPlain)) {
+    Write-Host "Enter your Twitch Stream Key" -ForegroundColor Yellow
+    Write-Host "(Find it at: https://dashboard.twitch.tv/settings/stream)" -ForegroundColor Gray
+    $streamKey = Read-Host -AsSecureString "Stream Key"
+    $streamKeyPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($streamKey)
+    )
+}
 
 if ([string]::IsNullOrWhiteSpace($streamKeyPlain)) {
     Write-Host "[ERROR] Stream key cannot be empty!" -ForegroundColor Red
+    Write-Host "Either provide a .env file at: $EnvFile" -ForegroundColor Yellow
+    Write-Host "Or enter the key when prompted." -ForegroundColor Yellow
     exit 1
 }
 
